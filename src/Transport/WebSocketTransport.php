@@ -149,6 +149,8 @@ final class WebSocketTransport implements Transport
                 $this->codec->encodeClient(FrameType::Close, pack('n', 1000)),
                 $this->writeTimeoutSeconds,
             );
+        } catch (\Throwable) {
+            // The close frame is best effort: the peer may already be gone.
         } finally {
             $this->closed = true;
             $this->stream->close();

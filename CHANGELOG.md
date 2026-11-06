@@ -2,6 +2,12 @@
 
 All notable changes to PAM Browser will be documented here.
 
+## 1.0.1 - 2026-11-06
+
+- Keep `close()` and the `Browser` destructor from throwing when the CDP
+  connection is already gone, which caused a fatal error that hid the original
+  failure and could leave the browser process running.
+
 ## 1.0.0 - 2026-08-24
 
 - Add a typed PHP 8.5+ Chrome DevTools Protocol client for PAM.
