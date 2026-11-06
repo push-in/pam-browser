@@ -94,7 +94,11 @@ final class Browser
         } catch (\Throwable) {
             // Process ownership below guarantees cleanup if CDP is already gone.
         } finally {
-            $this->connection->close();
+            try {
+                $this->connection->close();
+            } catch (\Throwable) {
+                // The browser process must still be stopped below.
+            }
             $this->process->close();
         }
     }
