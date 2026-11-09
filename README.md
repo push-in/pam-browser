@@ -1,37 +1,116 @@
-# PAM Browser
+<div align="center">
 
-`pushinbr/pam-browser` is a typed Chrome DevTools Protocol (CDP) client for
-PHP applications running on PAM. It is the browser boundary used by the PAM
-WhatsApp Web client and does not depend on Node.js, npm, Puppeteer, or
-Playwright.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+  <img src=".github/assets/banner-light.svg" width="880" alt="pam-browser: A typed Chrome DevTools Protocol client for PHP on PAM. No Node.js, no Puppeteer.">
+</picture>
 
-## Start here
+**Drive Chrome and Chromium from typed PHP, straight over the DevTools Protocol.**<br>
+PAM supervises the browser process and speaks CDP over its own WebSocket transport. Node.js, npm, Puppeteer and Playwright are never installed.
 
-Install the PAM Runtime first, confirm its environment, and install the browser
-client with PAM's verified Composer integration:
+[![Packagist](https://img.shields.io/packagist/v/pushinbr/pam-browser?label=packagist&color=f53003)](https://packagist.org/packages/pushinbr/pam-browser)
+[![Latest release](https://img.shields.io/github/v/release/push-in/pam-browser?label=release&color=e3a008)](https://github.com/push-in/pam-browser/releases/latest)
+![PHP 8.5](https://img.shields.io/badge/php-8.5-777bb4)
+[![License](https://img.shields.io/github/license/push-in/pam-browser?color=1f6feb)](LICENSE)
 
-```bash
-curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
-    --connect-timeout 15 --max-time 60 --max-filesize 1048576 -fsSL \
-    https://github.com/push-in/pam/releases/latest/download/install.sh | sh
+[Install](#install) · [Quick example](#quick-example) · [What it covers](#what-it-covers) · [Docs](#docs) · [Issues](https://github.com/push-in/pam-browser/issues)
 
-pam doctor
-mkdir pam-browser-app && cd pam-browser-app
-pam composer init --no-interaction
-pam composer require pushinbr/pam-browser:^1.0
+</div>
+
+<a id="install"></a>
+## <picture><img src=".github/assets/icons/terminal.svg" width="22" height="22" alt=""></picture> Install
+
+Create a PAM project and add the browser client:
+
+```sh
+pam init my-app --template raw
+cd my-app
+pam composer require pushinbr/pam-browser
 ```
 
-Install Chrome or Chromium separately on the host. PAM Browser supervises that
-external process and speaks CDP directly; Node.js and browser automation
-wrappers are not installed.
+Install Chrome or Chromium separately on the host. PAM Browser supervises that external process and speaks CDP directly; no Node.js or browser-automation wrapper is installed. New to PAM? Start with the [PAM introduction](https://push-in.github.io/pam-docs/introduction/).
 
-The package is being built in layers:
+<a id="quick-example"></a>
+## <picture><img src=".github/assets/icons/code.svg" width="22" height="22" alt=""></picture> Quick example
 
-1. protocol codec and event routing;
-2. PAM-native WebSocket client transport;
-3. supervised Chrome/Chromium lifecycle;
-4. browser contexts, pages, JavaScript bindings, and persistent profiles.
+Launch Chromium, evaluate JavaScript in a page and receive data back in PHP through a binding. Save it as `browser.php` and run `pam browser.php`.
 
-The browser itself remains an external Chrome/Chromium process. JavaScript may
-be evaluated inside a page, while the application API and orchestration remain
-strictly typed PHP.
+```php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__.'/vendor/autoload.php';
+
+use Pam\Browser\Browser;
+
+$browser = Browser::launch();
+try {
+    $product = $browser->version()['product'] ?? 'unknown';
+
+    $page = $browser->newPage('data:text/html,<title>PAM Browser</title>');
+    echo $page->evaluate('document.title'), "\n"; // PAM Browser
+
+    $page->exposeBinding('fromPage', static function (mixed $payload): void {
+        var_dump($payload); // ['bridge' => 'ready']
+    });
+    $page->evaluate('globalThis.fromPage(JSON.stringify({bridge: "ready"}))');
+    $page->pump(1.0);
+
+    printf("Connected to %s, target %s\n", $product, $page->targetId);
+} finally {
+    $browser->close();
+}
+```
+
+Adapted from [`tests/integration/chromium.php`](tests/integration/chromium.php), the live Chromium gate. `Browser::launch()` accepts `Pam\Browser\Chromium\LaunchOptions` (executable, user data directory for a persistent profile, headless, timeout, extra arguments).
+
+<a id="platform-support"></a>
+## <picture><img src=".github/assets/icons/grid.svg" width="22" height="22" alt=""></picture> Platform support
+
+| Platform | Support | Notes |
+| --- | --- | --- |
+| PAM runtime host | Chrome or Chromium installed | Found on `PATH` (`google-chrome-stable`, `google-chrome`, `chromium`, `chromium-browser`, `chrome`), or set `PAM_CHROME_PATH` / `LaunchOptions::executable` |
+| PHP | 8.5+ | From `composer.json` |
+
+<a id="what-it-covers"></a>
+## <picture><img src=".github/assets/icons/browser.svg" width="22" height="22" alt=""></picture> What it covers
+
+| Layer | Classes |
+| --- | --- |
+| Protocol codec and event routing | `Protocol\Command`, `Protocol\Response`, `Protocol\Event`, `Connection` (`command`, `on`, `waitForEvent`, `pump`) |
+| PAM-native WebSocket transport | `Transport\WebSocketTransport`, `WebSocket\FrameCodec` (no third-party WebSocket dependency) |
+| Supervised Chrome/Chromium lifecycle | `Chromium\BrowserProcess`, `Chromium\LaunchOptions`, `Chromium\ExecutableLocator`, persistent profiles |
+| Browser and pages | `Browser` (`launch`, `version`, `newPage`, `createTarget`, `close`), `Page` (`navigate`, `evaluate`, `waitForFunction`, `exposeBinding`, `addScriptOnNewDocument`, `captureScreenshot`, `setUserAgent`, `authenticate`, `serveDocument`, `captureDocument`) |
+
+The browser itself remains an external Chrome/Chromium process. JavaScript may be evaluated inside a page, while the application API and orchestration remain strictly typed PHP. PAM Browser is the browser boundary used by [PAM WhatsApp Web](https://github.com/push-in/pam-whatsapp-web).
+
+<a id="verification"></a>
+## <picture><img src=".github/assets/icons/flask.svg" width="22" height="22" alt=""></picture> Verification
+
+```sh
+pam composer analyse           # PHPStan level 9
+pam composer test              # PHPUnit
+pam composer test:integration  # live Chromium gate: pam tests/integration/chromium.php
+```
+
+<a id="docs"></a>
+## <picture><img src=".github/assets/icons/book.svg" width="22" height="22" alt=""></picture> Docs
+
+- [PAM introduction](https://push-in.github.io/pam-docs/introduction/)
+- [Packages overview](https://push-in.github.io/pam-docs/packages/overview/)
+- [Changelog](CHANGELOG.md)
+- [Report an issue](https://github.com/push-in/pam-browser/issues)
+
+<a id="pam-ecosystem"></a>
+## <picture><img src=".github/assets/icons/plug.svg" width="22" height="22" alt=""></picture> Part of the PAM ecosystem
+
+PAM runs PHP natively on servers, desktops and phones. This repository is one piece of it.
+
+| [**PAM**](https://github.com/push-in/pam) | [**PAM Desktop**](https://github.com/push-in/pam-desktop) | [**PAM Native**](https://github.com/push-in/pam-native) | [**Ecosystem**](https://github.com/push-in/pam#ecosystem) |
+| --- | --- | --- | --- |
+| the runtime and CLI | native desktop apps in PHP | native Android and iOS apps in PHP | every official package and plugin |
+
+<sub>Docs: [push-in.github.io/pam-docs](https://push-in.github.io/pam-docs/introduction/) · [Issues](https://github.com/push-in/pam-browser/issues)</sub>
+
+<p align="center"><sub><a href="LICENSE">Apache License 2.0</a> · Made in Brazil by Pushin</sub></p>
